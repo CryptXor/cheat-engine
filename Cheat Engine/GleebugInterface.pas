@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, DebuggerInterface, Windows, cefuncproc, newkernelhandler,
-  symbolhandler, Dialogs;
+  symbolhandler, Dialogs, CEDebugger;
 
 type
   PE32Structure = ^PE_32_STRUCT;
