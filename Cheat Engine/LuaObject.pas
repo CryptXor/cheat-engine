@@ -27,7 +27,12 @@ resourcestring
 function object_destroy(L: PLua_State): integer; cdecl;
 var c: TObject;
   metatable: integer;
-  i: integer;
+  i,count: integer;
+  proplist: PPropList;
+  m: TMethod;
+  ma: array of TMethod;
+
+
 begin
   i:=ifthen(lua_type(L, lua_upvalueindex(1))=LUA_TUSERDATA, lua_upvalueindex(1), 1);
   c:=lua_toceuserdata(L, i);
@@ -35,6 +40,31 @@ begin
   metatable:=lua_gettop(L);
 
   try
+    //check if it has onDestroy, if so, call it
+    //now cleanup the callers
+
+    if (c is TCustomForm) and assigned(TCustomForm(c).OnDestroy) then
+    begin
+      try
+        TCustomForm(c).OnDestroy(c);
+      except
+        //don't care
+      end;
+    end;
+
+    count:=GetPropList(c, proplist);
+    for i:=0 to count-1 do
+    begin
+      if proplist[i]^.PropType.Kind=tkMethod then
+      begin
+        m:=GetMethodProp(c, proplist[i]);
+        CleanupLuaCall(m);
+        m.Code:=nil;
+        m.data:=nil;
+        SetMethodProp(c, proplist[i], m);
+      end;
+    end;
+
     c.free;
   except
   end;
