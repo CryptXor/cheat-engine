@@ -198,12 +198,14 @@ type
     procedure FormCloseQuery(Sender: TObject; var CanClose: boolean);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
+    procedure FormShow(Sender: TObject);
     procedure ListView1Data(Sender: TObject; Item: TListItem);
     procedure ListView1DblClick(Sender: TObject);
     procedure miCloseClick(Sender: TObject);
     procedure miRangeDeleteSelectedClick(Sender: TObject);
     procedure miRangeDeleteAllClick(Sender: TObject);
     procedure Panel5Click(Sender: TObject);
+    procedure pmRangeOptionsPopup(Sender: TObject);
     procedure rbLogToFolderChange(Sender: TObject);
     procedure tActivatorTimer(Sender: TObject);
     procedure tbRecordPauseChange(Sender: TObject);
@@ -1335,7 +1337,7 @@ end;
 
 procedure TfrmUltimap2.tbRecordPauseChange(Sender: TObject);
 var
-  size: dword;
+  bsize: dword;
   s: string;
   ranges: TURangeArray;
   r: TCPUIDResult;
@@ -1392,8 +1394,8 @@ begin
         raise exception.create('Target a different process. Ultimap2 will suspend the target when the buffer is full, and suspending the thing that empties the buffer is not a good idea');
 
       //initial checks are OK
-      size:=strtoint(edtBufSize.text)*1024;
-      if size<12*1024 then
+      bsize:=strtoint(edtBufSize.text)*1024;
+      if bsize<12*1024 then
         raise exception.create('The size has to be 12KB or higher');
 
       setlength(ranges,lbrange.count);
@@ -1471,7 +1473,7 @@ begin
             inc(p^.size, 4096-p^.size);
 
           getmem(p^.memory, p^.size);
-          getmem(p^.info, size*sizeof(TByteInfo));
+          getmem(p^.info, p^.size*sizeof(TByteInfo));
           ReadProcessMemory(processhandle, pointer(p^.address), p^.memory, p^.size, br);
           if br=0 then
             freeRegion(p)
@@ -1514,9 +1516,9 @@ begin
       DBK32Initialize;
 
       if rbLogToFolder.Checked then
-        ultimap2(processid, size, deTargetFolder.Directory, ranges)
+        ultimap2(processid, bsize, deTargetFolder.Directory, ranges)
       else
-        ultimap2(processid, size, '', ranges);
+        ultimap2(processid, bsize, '', ranges);
 
       FilterGUI(true);
 
@@ -1580,6 +1582,16 @@ begin
   cleanup;
   frmUltimap2:=nil;
 end;
+
+procedure TfrmUltimap2.FormShow(Sender: TObject);
+var minwidth: integer;
+begin
+  minwidth:=edtBufSize.Font.GetTextWidth(edtBufSize.Text);
+  if edtBufSize.ClientWidth<minwidth then
+    edtBufSize.ClientWidth:=minwidth;
+end;
+
+
 
 procedure TfrmUltimap2.ListView1Data(Sender: TObject; Item: TListItem);
 var data: PValidEntry;
@@ -1695,6 +1707,8 @@ begin
   result:=listText+' -error';
 end;
 
+
+
 procedure TfrmUltimap2.btnAddRangeClick(Sender: TObject);
 var
   r: string;
@@ -1702,7 +1716,15 @@ var
   start, stop: uint64;
   stoprange: boolean;
 begin
-  if lbrange.Items.Count>=maxrangecount then
+  if sender=lbRange then
+  begin
+    if lbRange.itemindex=-1 then exit;
+    output:=lbrange.items[lbRange.itemindex];
+  end
+  else
+    output:='';
+
+  if (sender=btnAddRange) and (lbrange.Items.Count>=maxrangecount) then
   begin
     MessageDlg('Max amount of ranges reached for your CPU. Clear one first', mtError, [mbok],0);
     exit;
@@ -1712,7 +1734,7 @@ begin
     l:=tstringlist.create;
 
   symhandler.getModuleList(l);
-  output:='';
+
   ShowSelectionList(self, 'Module list', 'Select a module or give your own range'#13#10'(Put between *''s to mark as an auto stop range)', l, output, true, @ModuleSelectEvent);
   if output<>'' then
   begin
@@ -1731,11 +1753,16 @@ begin
 
     if symhandler.parseRange(output, start, stop) then
     begin
-      if stoprange then
-        lbrange.Items.Add('*'+inttohex(start,8)+'-'+inttohex(stop,8)+'*')
-      else
-        lbrange.Items.Add(inttohex(start,8)+'-'+inttohex(stop,8));
 
+      if stoprange then
+        r:='*'+inttohex(start,8)+'-'+inttohex(stop,8)+'*'
+      else
+        r:=inttohex(start,8)+'-'+inttohex(stop,8);
+
+      if sender=lbRange then
+        lbrange.items[lbRange.itemindex]:=r
+      else
+        lbrange.Items.Add(r);
     end;
   end;
 
@@ -1989,6 +2016,12 @@ end;
 procedure TfrmUltimap2.Panel5Click(Sender: TObject);
 begin
 
+end;
+
+procedure TfrmUltimap2.pmRangeOptionsPopup(Sender: TObject);
+begin
+  miRangeDeleteSelected.enabled:=lbrange.SelCount>0;
+  miRangeDeleteAll.enabled:=lbrange.count>0;
 end;
 
 procedure TfrmUltimap2.rbLogToFolderChange(Sender: TObject);
